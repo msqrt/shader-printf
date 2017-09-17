@@ -1,0 +1,14 @@
+*
+!*.gitignore
+!*.cpp
+!*.hpp
+!*.txt
+!*/
+!*.sln
+!*.vcxproj
+!*.hlsl
+x64/*
+*/cache/*
+*error*
+*warning*
+!*.md
