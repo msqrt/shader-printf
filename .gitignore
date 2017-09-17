@@ -2,6 +2,7 @@
 !*.gitignore
 !*.cpp
 !*.hpp
+!*.h
 !*.txt
 !*/
 !*.sln
