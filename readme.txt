@@ -1,4 +1,3 @@
-# shader-printf
 Simple printf functionality for GLSL.
 
 This library is a simple proof of concept of using printf directly from a shader. The main point of being able to do this is to ease the debugging of complicated shader programs. This is invaluable for example when it's essential to see the evolution of the value of a variable in a loop and simply outputting the final value will not give enough information of how the program works.
