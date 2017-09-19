@@ -131,6 +131,10 @@
     <ClInclude Include="..\loadgl\gl_load_45.h" />
     <ClInclude Include="..\loadgl\wglext.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="fragment.glsl" />
+    <None Include="vertex.glsl" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

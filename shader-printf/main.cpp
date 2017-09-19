@@ -1,6 +1,8 @@
 
 #include <windows.h>
 #include <string>
+#include <fstream>
+#include <vector>
 
 #include <gl/gl.h>
 #include <loadgl/wglext.h>
@@ -42,8 +44,23 @@ int main() {
 
 	setupGL(1280, 720, "printf test", false);
 	
-	addShaderInclude("printf.glsl");
-	createShader("fragment.glsl", GL_FRAGMENT_SHADER);
+	GLuint vertex = createShader("vertex.glsl", GL_VERTEX_SHADER), fragment = createShader("fragment.glsl", GL_FRAGMENT_SHADER);
+	GLuint program = glCreateProgram();
+	glAttachShader(program, vertex);
+	glAttachShader(program, fragment);
+	glLinkProgram(program);
+
+	std::vector<unsigned>printfData(16 * 1024 * 1024);
+
+	GLuint printfBuffer;
+	glCreateBuffers(1, &printfBuffer);
+	glNamedBufferData(printfBuffer, printfData.size() * sizeof(unsigned), nullptr, GL_STREAM_READ);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, printfBuffer);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+	GLuint vao;
+	glGenVertexArrays(1, &vao);
+	glBindVertexArray(vao);
 
 	bool loop = true;
 	while (loop) {
@@ -59,6 +76,61 @@ int main() {
 
 		glClearColor(.0f, .0f, .0f, .0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		POINT mouse;
+		GetCursorPos(&mouse);
+		ScreenToClient(wnd, &mouse);
+
+		glUseProgram(program);
+		unsigned size = 1u;
+		glUniform2i(glGetUniformLocation(program, "mouse"), mouse.x, mouse.y);
+		glNamedBufferSubData(printfBuffer, 0, sizeof(unsigned), &size);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, glGetProgramResourceIndex(program, GL_SHADER_STORAGE_BLOCK, "printfBuffer"), printfBuffer);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+		glGetNamedBufferSubData(printfBuffer, 0, printfData.size()*sizeof(unsigned), printfData.data());
+
+		for (int i = 1; i < printfData[0]; ++i) {
+			if (printfData[i] == '%')
+				if (printfData[i + 1] == '%') {
+					printf("%%");
+					i++;
+				}
+				else {
+					int vecSize = 1;
+					std::string format;
+					while (std::string(1, printfData[i]).find_first_of("eEfFgGdiuoxXaA") == std::string::npos) {
+						if (printfData[i] == '^') {
+							vecSize = printfData[i + 1] - '0';
+							i += 2;
+						}
+						else {
+							format = format + std::string(1, printfData[i]);
+							i++;
+						}
+					}
+					format += printfData[i];
+					bool is_float = std::string(1, printfData[i]).find_first_of("diuoxX") == std::string::npos;
+					//printf("[");
+					//for (int j = 0; j < format.size(); ++j)
+					//	printf("%c", format[j]);
+					//printf("]");
+
+					if (vecSize > 1) printf("(");
+
+					for (int j = 0; j < vecSize; ++j) {
+						i++;
+						if(is_float)
+							printf(format.c_str(), *((float*)&printfData[i]));
+						else
+							printf(format.c_str(), printfData[i]);
+						if (vecSize > 1 && j < vecSize - 1) printf(", ");
+					}
+					if (vecSize > 1) printf(")");
+				}
+			else
+				printf("%c", printfData[i]);
+		}
+		printf("\n");
 
 		SwapBuffers(dc);
 	}
@@ -206,11 +278,148 @@ void closeGL() {
 	UnregisterClass("classy class", GetModuleHandle(nullptr));
 }
 
-#include <fstream>
-
 GLuint createShader(const std::string& path, GLenum shaderType) {
 	using namespace std;
 	string source = string(istreambuf_iterator<char>(ifstream(path)), istreambuf_iterator<char>());
+
+	// insert our buffer definition after the glsl version define
+	size_t version = source.find("#version");
+	size_t lineAfterVersion = 2, bufferInsertOffset = 0;
+
+	if (version != string::npos) {
+		++bufferInsertOffset;
+		for (size_t i = 0; i < version; ++i)
+			if (source[i] == '\n')
+				++lineAfterVersion;
+		for (size_t i = version; i < source.length(); ++i)
+			if (source[i] == '\n')
+				break;
+			else
+				bufferInsertOffset += 1;
+	}
+	printf("%s", source.c_str());
+
+	size_t printfLoc = source.find("printf(");
+	while (printfLoc != string::npos) {
+		size_t printfEndLoc = printfLoc;
+
+		int parentheses = 0;
+		bool inString = false;
+		vector<string> args;
+		while (true) {
+			
+			printfEndLoc++;
+
+			if (!inString && parentheses == 1 && source[printfEndLoc] == ',') {
+				std::string arg;
+
+				size_t argLoc = printfEndLoc + 1;
+				int argParentheses = 0;
+				while (argParentheses > 0 || source[argLoc] != ','){
+					if (source[argLoc] == '(') ++argParentheses;
+					if (source[argLoc] == ')') --argParentheses;
+					if (argParentheses < 0) break;
+					if (source[argLoc] != ' ')
+						arg = arg + string(1, source[argLoc]);
+					++argLoc;
+				}
+				args.emplace_back(arg);
+			}
+
+			if (source[printfEndLoc] == '"')
+				inString = !inString;
+			if (!inString && source[printfEndLoc] == '(')
+				parentheses++;
+			if (!inString && source[printfEndLoc] == ')') {
+				parentheses--;
+				if (!parentheses) {
+					do { printfEndLoc++; } while (source[printfEndLoc] != ';');
+					break;
+				}
+			}
+		}
+
+		int ii = 0;
+		for (auto& a : args) {
+			for (int i = 0; i < a.length(); ++i)
+				if (a[i] == ' ')
+					a = a.substr(0, i) + a.substr(i + 2);
+			printf("#%d: %s\n", ii, a.c_str());
+			++ii;
+		}
+
+		std::string replacement = "";
+		size_t argumentIndex = 0, writeSize = 0;
+		inString = false;
+		for (size_t i = printfLoc; i < printfEndLoc; ++i) {
+
+			if (source[i] == '"')
+				inString = !inString;
+			if (inString && source[i] == '\\') {
+				char ch = '\\';
+				switch (source[i + 1]) {
+				case '\'': ch = '\''; break;
+				case '\"': ch = '\"'; break;
+				case '?': ch = '\?'; break;
+				case '\\': ch = '\\'; break;
+				case 'a': ch = '\a'; break;
+				case 'b': ch = '\b'; break;
+				case 'f': ch = '\f'; break;
+				case 'n': ch = '\n'; break;
+				case 'r': ch = '\r'; break;
+				case 't': ch = '\t'; break;
+				case 'v': ch = '\v'; break;
+				default: ch = ' ';
+				}
+				replacement += "printfData[printfIndex++]=" + std::to_string(ch) + ";";
+				writeSize++;
+				i++;
+			}
+			else if (inString && source[i] != '"') {
+				replacement += "printfData[printfIndex++]=" + std::to_string(unsigned(source[i])) + ";";
+				writeSize++;
+			}
+			if (inString && source[i] == '%')
+				if (source[i + 1] == '%') {
+					i++;
+					replacement += "printfData[printfIndex++]=" + std::to_string(unsigned(source[i])) + ";";
+					writeSize++;
+				}
+				else {
+					int vecSize = 1;
+					while (string(1, source[i]).find_first_of("eEfFgGdiuoxXaA") == string::npos) {
+						if (source[i] == '^')
+							vecSize = source[i + 1] - '0';
+						i++;
+						replacement += "printfData[printfIndex++]=" + std::to_string(unsigned(source[i])) + ";";
+						writeSize++;
+					}
+
+					for (int j = 0; j < vecSize; ++j) {
+						std::string arg = args[argumentIndex];
+						if (vecSize > 1)
+							arg = "(" + arg + ")." + string("xyzw")[j];
+						switch (source[i]) {
+						case 'e': case 'E': case 'f': case 'F': case 'g': case 'G': case 'x': case 'X':
+							replacement += "printfData[printfIndex++]=floatBitsToUint(" + arg + ");"; break;
+						default:
+							replacement += "printfData[printfIndex++]=" + arg + ";"; break;
+						}
+						writeSize++;
+					}
+					argumentIndex++;
+				}
+		}
+
+		source = source.substr(0, printfLoc) + "if(printfWriter){" + "uint printfIndex=atomicAdd(printfData[0]," + std::to_string(writeSize) + "u);" + replacement + "}" + source.substr(printfEndLoc + 1);
+
+		printfLoc = source.find("printf(");
+	}
+
+	source = source.substr(0, bufferInsertOffset) + "\nbuffer printfBuffer{uint printfData[];};bool printfWriter = false;void enablePrintf(){printfWriter=true;}void disablePrintf(){printfWriter=false;}\n#line " + std::to_string(lineAfterVersion) + "\n" + source.substr(bufferInsertOffset);
+
+	printf("modified:\n%s", source.c_str());
+
 	GLuint shader = glCreateShader(shaderType);
 
 	auto ptr = (const GLchar*)source.c_str();
@@ -232,7 +441,7 @@ GLuint addShaderInclude(const std::string& path) {
 	using namespace std;
 	auto name = path;
 	auto lastInd = name.find_last_of("\\/");
-	if (lastInd != std::string::npos)
+	if (lastInd != string::npos)
 		name = name.substr(lastInd);
 	name = "/" + name;
 	string source = string(istreambuf_iterator<char>(ifstream(path)), istreambuf_iterator<char>());
