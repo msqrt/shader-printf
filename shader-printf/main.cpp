@@ -14,7 +14,6 @@ int main() {
 	glAttachShader(program, fragment);
 	glLinkProgram(program);
 
-	GLuint printBuffer = createPrintBuffer();
 
 	GLuint vao;
 	glGenVertexArrays(1, &vao);
@@ -37,19 +36,25 @@ int main() {
 
 		glUseProgram(program);
 
-		bindPrintBuffer(program, printBuffer);
-
 		POINT mouse = getMouse();
 		glUniform2i(glGetUniformLocation(program, "mouse"), mouse.x, mouse.y);
 
+		// create a buffer to hold the printf results
+		GLuint printBuffer = createPrintBuffer();
+		// bind it to the current program
+		bindPrintBuffer(program, printBuffer);
+
+		// do any amount of draw/compute that appends to the buffer
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		
+		// convert to string, output to console
 		printf("%s\n", getPrintBufferString(printBuffer).c_str());
+		// clean up
+		deletePrintBuffer(printBuffer);
 
 		swapBuffers();
 	}
 
-	deletePrintBuffer(printBuffer);
 	
 	glBindVertexArray(0);
 	glDeleteVertexArrays(1, &vao);
