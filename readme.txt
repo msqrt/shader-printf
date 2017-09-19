@@ -1,5 +1,7 @@
 Simple printf functionality for GLSL.
 
+![oo shiny](https://i.imgur.com/yGxIXIb.png)
+
 This library is a simple proof of concept of using printf directly from a shader. The main point of being able to do this is to ease the debugging of complicated shader programs. This is invaluable for example when it's essential to see the evolution of the value of a variable in a loop and simply outputting the final value will not give enough information of how the program works.
 
 Currently the library is a single header file, shaderprintf.h. This file contains a function called glShaderSourcePrint that simply acts as a replacement for glShaderSource for any shaders where the printing functionality is desired. It also contains a final parser called getPrintBufferString that returns all of the printed content as a C++ std::string. In addition to these two it contains helpers to create, bind and delete a necessary temporary buffer that should be somewhat simple to understand by looking at the example main loop in main.cpp.
