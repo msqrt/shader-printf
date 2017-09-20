@@ -117,6 +117,21 @@ inline size_t findCall(const std::string& source, const std::string& function) {
 // a preprocessor for shader source
 inline std::string addPrintToSource(std::string source) {
 
+	// get rid of comments beforehand
+	std::string commentedSource = "";
+	std::swap(source, commentedSource);
+
+	bool commentLong = false;
+	bool commentRow = false;
+	for (size_t i = 0; i < commentedSource.length(); ++i) {
+		if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '*') { commentLong = true; i++; continue; }
+		if (i < commentedSource.length() - 1 && commentedSource[i] == '*' && commentedSource[i + 1] == '/') { commentLong = false; i++; continue; }
+		if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '/') { commentRow = true; i++; continue; }
+		if (commentedSource[i] == '\n') commentRow = false;
+		if (!commentLong && !commentRow)
+			source += std::string(1, commentedSource[i]);
+	}
+
 	// insert our buffer definition after the glsl version define
 	size_t version = source.find("#version");
 	size_t lineAfterVersion = 2, bufferInsertOffset = 0;
