@@ -123,11 +123,15 @@ inline std::string addPrintToSource(std::string source) {
 
 	bool commentLong = false;
 	bool commentRow = false;
+	bool inString = false;
 	for (size_t i = 0; i < commentedSource.length(); ++i) {
-		if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '*') { commentLong = true; i++; continue; }
-		if (i < commentedSource.length() - 1 && commentedSource[i] == '*' && commentedSource[i + 1] == '/') { commentLong = false; i++; continue; }
-		if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '/') { commentRow = true; i++; continue; }
-		if (commentedSource[i] == '\n') commentRow = false;
+		if (commentedSource[i] == '"' && (i==0||commentedSource[i-1]!='\\')) inString = !inString;
+		if (!inString) {
+			if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '*') { commentLong = true; i++; continue; }
+			if (i < commentedSource.length() - 1 && commentedSource[i] == '*' && commentedSource[i + 1] == '/') { commentLong = false; i++; continue; }
+			if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '/') { commentRow = true; i++; continue; }
+			if (commentedSource[i] == '\n') commentRow = false;
+		}
 		if (!commentLong && !commentRow)
 			source += std::string(1, commentedSource[i]);
 	}
