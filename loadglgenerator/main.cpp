@@ -77,7 +77,10 @@ int main(int argc, char* argv[]) {
 					while (std::getline(glext, line) && std::string::npos == line.find("#endif")) {
 						int firstpos = line.find("APIENTRY ") + std::string("APIENTRY ").length();
 						int lastpos = line.find("(") - firstpos;
-						std::string func = line.substr(firstpos, lastpos);
+						std::string spacedfunc = line.substr(firstpos, lastpos), func;
+						for (auto& f : spacedfunc)
+							if (f != ' ')
+								func += std::string(1,f);
 						std::string stripfunc = func;
 
 						if (func.find("ARB") != std::string::npos)

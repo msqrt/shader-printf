@@ -86,6 +86,34 @@ inline std::string getPrintBufferString(GLuint outBuffer) {
 	return result;
 }
 
+#include <cctype>
+
+inline size_t findCall(const std::string& source, const std::string& function) {
+	size_t tentative = source.find(function);
+	
+	if (tentative == std::string::npos)
+		return std::string::npos;
+	
+	bool commentLong = false;
+	bool commentRow = false;
+	for (size_t i = 0; i < tentative; ++i) {
+		if (source[i] == '/' && source[i + 1] == '*') commentLong = true;
+		if (source[i] == '*' && source[i + 1] == '/') commentLong = false;
+		if (source[i] == '/' && source[i + 1] == '/') commentRow = true;
+		if (source[i] == '\n') commentRow = false;
+	}
+	size_t tentativeEnd = tentative + function.length();
+	if (commentRow || commentLong || (tentative > 0 && !std::isspace(source[tentative - 1])) || tentativeEnd >= source.length() || !(std::isspace(source[tentativeEnd]) || source[tentativeEnd] == '(')) {
+		size_t result = findCall(source.substr(tentative + 1), function);
+		if (result == std::string::npos)
+			return std::string::npos;
+		else
+			return tentative + 1 + result;
+	}
+	else
+		return tentative;
+}
+
 // a preprocessor for shader source
 inline std::string addPrintToSource(std::string source) {
 
@@ -108,10 +136,8 @@ inline std::string addPrintToSource(std::string source) {
 	}
 
 	// go through all printfs in the shader
-	size_t printfLoc = source.find("printf(");
+	size_t printfLoc = findCall(source, "printf");
 	while (printfLoc != std::string::npos) {
-
-		if (printfLoc > 0 && (source[printfLoc - 1] != ' ' && source[printfLoc - 1] != '\t' && source[printfLoc - 1] != '\n')) continue;
 
 		size_t printfEndLoc = printfLoc;
 
@@ -222,7 +248,7 @@ inline std::string addPrintToSource(std::string source) {
 
 		source = source.substr(0, printfLoc) + "if(printfWriter){" + "uint printIndex=min(atomicAdd(printData[0]," + std::to_string(writeSize) + "u),printData.length()-" + std::to_string(writeSize) + "u);" + replacement + "}" + source.substr(printfEndLoc + 1);
 
-		printfLoc = source.find("printf(");
+		printfLoc = findCall(source, "printf");
 	}
 
 	// insert the ssbo definition and some helper functions after the #version line
