@@ -10,6 +10,6 @@ Also note that GLSL doesn't support characters, strings or pointers so %c, %s an
 
 Due to the native vector types of GLSL, the format specifier definition of printf is enhanced to contain dimensionality and is as follows : %[flags][width][.precision][length][^dimensions]specifier. dimensions is a number between 1 and 4. All elements will be printed with the same format specifier (which matches the standard if we omit the [^dimensions] part), surrounded by parentheses and separated with commas and spaces. They're written in the order xyzw and a subset can be printed (i.e. printf("%.1^3f", vec4(1.0)); is completely legal and will print "(1.0, 1.0, 1.0)")
 
-The example program should work directly from the repository with Visual Studio, select shader-printf as the startup project and run. Everything here is written in VS2017 but at least VS2015 should be fine as well.
+The example program should work directly from the repository with Visual Studio, select shader-printf as the startup project and run. Everything here is written in VS2017 but at least VS2015 should be fine as well. OpenGL version 4.3 (or the shader storage buffer object extension) is required.
 
 The repository also comes with a minimal OpenGL extension handler/windowing system that's aimed at targeting a single core version with all of the nice debug features that modern OpenGL comes with. It's probably not much of use as is but it's a nice reference and you might find features you didn't know about.
