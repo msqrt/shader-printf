@@ -26,53 +26,68 @@
 #include <string>
 #include <vector>
 
-#define GL_MAX_PRINT_BUFFER_SIZE (16*1024*1024)
-
-inline GLuint createPrintBuffer() {
+// creates a shader storage buffer object to be used with the print functionality.
+// any SSBO can be used, this is just for convenience and does nothing special.
+inline GLuint createPrintBuffer(unsigned size = 16 * 1024 * 1024) {
 	GLuint printBuffer;
 	glCreateBuffers(1, &printBuffer);
-	glNamedBufferData(printBuffer, GL_MAX_PRINT_BUFFER_SIZE * sizeof(unsigned), nullptr, GL_STREAM_READ);
+	glNamedBufferData(printBuffer, size * sizeof(unsigned), nullptr, GL_STREAM_READ);
 	return printBuffer;
 }
 
+// deletes the given buffer
 inline void deletePrintBuffer(GLuint printBuffer) {
 	glDeleteBuffers(1, &printBuffer);
 }
 
-inline void bindPrintBuffer(GLuint program, GLuint outBuffer) {
-
-	// reset the buffer; only first value relevant (writing position / size of output)
+// binds a print buffer to the current program; call anywhere between glUseProgram and the draw/dispatch call
+inline void bindPrintBuffer(GLuint program, GLuint printBuffer) {
+	// reset the buffer; only first value relevant (writing position / size of output), rest is filled up to the index this states
 	unsigned beginIterator = 1u;
-	glNamedBufferSubData(outBuffer, 0, sizeof(unsigned), &beginIterator);
+	glNamedBufferSubData(printBuffer, 0, sizeof(unsigned), &beginIterator);
 
 	// bind to whatever slot we happened to get
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, glGetProgramResourceIndex(program, GL_SHADER_STORAGE_BLOCK, "printBuffer"), outBuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, glGetProgramResourceIndex(program, GL_SHADER_STORAGE_BLOCK, "printBuffer"), printBuffer);
 }
 
-inline std::string getPrintBufferString(GLuint outBuffer) {
+// fetches the printed buffer from VRAM and turns it into an std::string
+inline std::string getPrintBufferString(GLuint printBuffer) {
 
-	unsigned size;
-	glGetNamedBufferSubData(outBuffer, 0, sizeof(unsigned), &size);
+	// get the size of what we want to read and the size of the print buffer
+	unsigned printedSize; int bufferSize;
+	glGetNamedBufferSubData(printBuffer, 0, sizeof(unsigned), &printedSize);
+	glGetNamedBufferParameteriv(printBuffer, GL_BUFFER_SIZE, &bufferSize);
+	bufferSize /= sizeof(unsigned);
 
-	if (size > GL_MAX_PRINT_BUFFER_SIZE)
-		size = GL_MAX_PRINT_BUFFER_SIZE;
+	// make sure we're not reading past the maximum size
+	if (printedSize > bufferSize)
+		printedSize = bufferSize;
 
-	std::vector<unsigned> printfData(size + 1);
-	printfData[0] = size;
+	// this vector will hold the CPU copy of the print buffer
+	std::vector<unsigned> printfData(printedSize + 1);
+	printfData[0] = printedSize;
 
-	glGetNamedBufferSubData(outBuffer, 0, GLsizei(printfData.size() * sizeof(unsigned)), printfData.data());
+	// get the rest of the buffer data (the actual text)
+	glGetNamedBufferSubData(printBuffer, sizeof(unsigned), GLsizei((printfData.size()-1) * sizeof(unsigned)), printfData.data()+1);
 
+	// the final string we're going to build
 	std::string result;
 
+	// to hold the temporary results of formatting
 	char intermediate[1024];
 
+	// this loop parses the formatting of the result
 	for (size_t i = 1; i < printfData[0]; ++i) {
+		// % indicates the beginning of a formatted input
 		if (printfData[i] == '%')
+			// if followed by another %, we're actually supposed to print '%'
 			if (printfData[i + 1] == '%') {
 				result += "%";
 				i++;
 			}
+			// otherwise we'll be printing numbers
 			else {
+				// first parse out the possible vector size
 				int vecSize = 1;
 				std::string format;
 				while (std::string(1, printfData[i]).find_first_of("eEfFgGdiuoxXaA") == std::string::npos) {
@@ -86,8 +101,11 @@ inline std::string getPrintBufferString(GLuint outBuffer) {
 					}
 				}
 				format += printfData[i];
-				bool isFloatType = std::string(1, printfData[i]).find_first_of("diuoxX") == std::string::npos;
 
+				// determine whether we'll have to do type conversion
+				bool isFloatType = std::string(1, printfData[i]).find_first_of("diuoxX") == std::string::npos;
+				
+				// print to a temporary buffer, add result to string (for vectors add parentheses and commas as in "(a, b, c)") 
 				if (vecSize > 1) result += "(";
 
 				for (int j = 0; j < vecSize; ++j) {
@@ -102,20 +120,23 @@ inline std::string getPrintBufferString(GLuint outBuffer) {
 
 				if (vecSize > 1) result += ")";
 			}
-		else
+		else // otherwise it's a single character, just add it to the result
 			result += std::string(1, printfData[i]);
 	}
+	// ... and we're done.
 	return result;
 }
 
 #include <cctype>
 
+// helper function that finds a function call
 inline size_t findCall(const std::string& source, const std::string& function) {
+	// search for any occurrence of function name
 	size_t tentative = source.find(function);
-	
 	if (tentative == std::string::npos)
 		return std::string::npos;
 	
+	// see if it's inside a comment
 	bool commentLong = false;
 	bool commentRow = false;
 	for (size_t i = 0; i < tentative; ++i) {
@@ -125,14 +146,19 @@ inline size_t findCall(const std::string& source, const std::string& function) {
 		if (source[i] == '\n') commentRow = false;
 	}
 	size_t tentativeEnd = tentative + function.length();
-	if (commentRow || commentLong || (tentative > 0 && !std::isspace(source[tentative - 1])) || tentativeEnd >= source.length() || !(std::isspace(source[tentativeEnd]) || source[tentativeEnd] == '(')) {
+	// if the tentative instance is not good...
+	if (commentRow || commentLong || // comment
+		(tentative > 0 && !std::isspace(source[tentative - 1])) || // is a part of a longer string
+		tentativeEnd >= source.length() || // is the end of the file
+		!(std::isspace(source[tentativeEnd]) || source[tentativeEnd] == '(')) { // is a part of a longer string
+		// ... find the next one
 		size_t result = findCall(source.substr(tentative + 1), function);
 		if (result == std::string::npos)
 			return std::string::npos;
 		else
 			return tentative + 1 + result;
 	}
-	else
+	else // otherwise return it
 		return tentative;
 }
 
@@ -296,7 +322,9 @@ inline std::string addPrintToSource(std::string source) {
 	return source.substr(0, bufferInsertOffset) + "\nbuffer printBuffer{uint printData[];};bool printfWriter = false;void enablePrintf(){printfWriter=true;}void disablePrintf(){printfWriter=false;}\n#line " + std::to_string(lineAfterVersion) + "\n" + source.substr(bufferInsertOffset);
 }
 
+// replacement for glShaderSource that parses printf commands into buffer insertions
 inline void glShaderSourcePrint(GLuint shader, GLsizei count, const GLchar **string, const GLint *length) {
+	// first combine all of the potential source files to a single string
 	std::string source;
 	for (int i = 0; i < count; ++i) {
 		if (!length || length[i] < 0)
@@ -304,7 +332,9 @@ inline void glShaderSourcePrint(GLuint shader, GLsizei count, const GLchar **str
 		else
 			source += std::string(string[i], length[i]);
 	}
+	// parse
 	source = addPrintToSource(source);
+	// do the compilation
 	auto* finalString = source.c_str();
 	glShaderSource(shader, 1, &finalString, nullptr);
 }
