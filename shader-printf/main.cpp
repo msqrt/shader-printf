@@ -48,7 +48,7 @@ int main() {
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		
 		// convert to string, output to console
-		printf("%s\n", getPrintBufferString(printBuffer).c_str());
+		printf("\n\nGLSL print:\n%s\n", getPrintBufferString(printBuffer).c_str());
 		// clean up
 		deletePrintBuffer(printBuffer);
 
