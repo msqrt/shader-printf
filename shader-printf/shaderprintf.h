@@ -1,7 +1,7 @@
 
 // MIT License
 //
-// Copyright(c) 2017-2018 Pauli Kemppinen
+// Copyright(c) 2017-2019 Pauli Kemppinen
 // 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files(the "Software"), to deal
@@ -134,6 +134,12 @@ inline std::string getPrintBufferString(GLuint printBuffer) {
 
 #include <cctype>
 
+inline bool isText(char t) {
+	if (std::isspace(t) || t == ';' || t == '(' || t == ')' || t == '{' || t == '}' || t == '[' || t == ']')
+		return false;
+	return true;
+}
+
 // helper function that finds a function call
 inline size_t findCall(const std::string& source, const std::string& function) {
 	// search for any occurrence of function name
@@ -153,7 +159,7 @@ inline size_t findCall(const std::string& source, const std::string& function) {
 	size_t tentativeEnd = tentative + function.length();
 	// if the tentative instance is not good...
 	if (commentRow || commentLong || // comment
-		(tentative > 0 && !std::isspace(source[tentative - 1])) || // is a part of a longer string
+		(tentative > 0 && isText(source[tentative - 1])) || // is a part of a longer string
 		tentativeEnd >= source.length() || // is the end of the file
 		!(std::isspace(source[tentativeEnd]) || source[tentativeEnd] == '(')) { // is a part of a longer string
 																				// ... find the next one
