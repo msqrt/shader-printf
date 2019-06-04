@@ -197,15 +197,17 @@ inline std::string addPrintToSource(std::string source) {
 
 	// insert our buffer definition after the glsl version define
 	size_t version = source.find("#version");
+	size_t extension = source.rfind("#extension"); // extensions also need to be defined before actual code
+	if (extension != std::string::npos)	version = max(extension, version);
 	size_t lineAfterVersion = 2, bufferInsertOffset = 0;
 
 	if (version != std::string::npos) {
-		++bufferInsertOffset;
 
 		for (size_t i = 0; i < version; ++i)
 			if (source[i] == '\n')
 				++lineAfterVersion;
 
+		bufferInsertOffset = version;
 		for (size_t i = version; i < source.length(); ++i)
 			if (source[i] == '\n')
 				break;
