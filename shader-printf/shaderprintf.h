@@ -180,25 +180,27 @@ inline std::string addPrintToSource(std::string source) {
 	std::string commentedSource = "";
 	std::swap(source, commentedSource);
 
-	bool commentLong = false;
-	bool commentRow = false;
-	bool inString = false;
-	for (size_t i = 0; i < commentedSource.length(); ++i) {
-		if (commentedSource[i] == '"' && (i == 0 || commentedSource[i - 1] != '\\')) inString = !inString;
-		if (!inString) {
-			if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '*') { commentLong = true; i++; continue; }
-			if (i < commentedSource.length() - 1 && commentedSource[i] == '*' && commentedSource[i + 1] == '/') { commentLong = false; i++; continue; }
-			if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '/') { commentRow = true; i++; continue; }
-			if (commentedSource[i] == '\n') commentRow = false;
+	{
+		bool commentLong = false;
+		bool commentRow = false;
+		bool inString = false;
+		for (size_t i = 0; i < commentedSource.length(); ++i) {
+			if (commentedSource[i] == '"' && (i == 0 || commentedSource[i - 1] != '\\')) inString = !inString;
+			if (!inString) {
+				if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '*') { commentLong = true; i++; continue; }
+				if (i < commentedSource.length() - 1 && commentedSource[i] == '*' && commentedSource[i + 1] == '/') { commentLong = false; i++; continue; }
+				if (i < commentedSource.length() - 1 && commentedSource[i] == '/' && commentedSource[i + 1] == '/') { commentRow = true; i++; continue; }
+				if (commentedSource[i] == '\n') commentRow = false;
+			}
+			if (!commentLong && !commentRow)
+				source += std::string(1, commentedSource[i]);
 		}
-		if (!commentLong && !commentRow)
-			source += std::string(1, commentedSource[i]);
 	}
 
 	// insert our buffer definition after the glsl version define
 	size_t version = source.find("#version");
 	size_t extension = source.rfind("#extension"); // extensions also need to be defined before actual code
-	if (extension != std::string::npos)	version = max(extension, version);
+	if (extension != std::string::npos)	version = extension > version ? extension : version;
 	size_t lineAfterVersion = 2, bufferInsertOffset = 0;
 
 	if (version != std::string::npos) {
@@ -208,11 +210,11 @@ inline std::string addPrintToSource(std::string source) {
 				++lineAfterVersion;
 
 		bufferInsertOffset = version;
-		for (size_t i = version; i < source.length(); ++i)
+		for (size_t i = version; i < source.length(); ++i) {
+			bufferInsertOffset += 1;
 			if (source[i] == '\n')
 				break;
-			else
-				bufferInsertOffset += 1;
+		}
 	}
 
 	// go through all printfs in the shader
