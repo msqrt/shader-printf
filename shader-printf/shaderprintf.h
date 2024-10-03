@@ -49,7 +49,7 @@ inline void bindPrintBuffer(GLuint program, GLuint printBuffer) {
 	GLint binding;
 	GLenum prop = GL_BUFFER_BINDING;
 	// get the binding that our printf buffer happened to be given
-	glGetProgramResourceiv(program, GL_SHADER_STORAGE_BLOCK, glGetProgramResourceIndex(program, GL_SHADER_STORAGE_BLOCK, "printfBuffer"), 1, &prop, sizeof(binding), nullptr, &binding);
+	glGetProgramResourceiv(program, GL_SHADER_STORAGE_BLOCK, glGetProgramResourceIndex(program, GL_SHADER_STORAGE_BLOCK, "printfBuffer"), 1, &prop, 1, nullptr, &binding);
 
 	// bind to whatever slot we happened to get
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, printBuffer);
